@@ -1,0 +1,144 @@
+---
+title: "ANOVA Final Project"
+output: html_document
+date: "2024-11-26"
+---
+
+```{r}
+library(psych)
+library(tidyverse)
+library(readr)
+library(readxl)
+library(dplyr)
+library(car)
+library(lsr)
+library(pwr)
+```
+
+```{r}
+dat <- read_excel("Gender&SpeakGroup.xlsx")
+```
+
+```{r}
+View(dat)
+```
+
+```{r}
+clean_dat <- dat %>%
+  filter(year == 2006) %>%
+  filter(
+    !(talkteam %in% c(".i: Inapplicable", ".d: Do not Know/Cannot Choose", ".n: No answer"))  # Exclude invalid responses
+  ) %>%
+  mutate(
+    talkteam = case_when(  # Recode Likert responses to numeric
+      talkteam == "Not at all likely" ~ 1,
+      talkteam == "Not very likely" ~ 2,
+      talkteam == "Somewhat likely" ~ 3,
+      talkteam == "Very likely" ~ 4,
+      TRUE ~ NA_real_
+    )
+  ) %>%
+  filter(!is.na(talkteam) & !is.na(gender1))  %>% # Remove rows with NA in talkteam or gender1
+rename(Gender = gender1)  # Rename gender1 to Gender
+```
+
+```{r}
+View(clean_dat)
+```
+
+```{r}
+table(clean_dat$Gender, useNA = "ifany")
+table(clean_dat$talkteam, useNA = "ifany")
+```
+
+Introduction paragraph:
+Addressing team dynamics and underperformance in the workplace is an important to achieve organizational success, yet individual differences, like gender, may impact how employees engage in these behaviors. Gender (male or female), the independent variable (IV) in this study, is often linked to workplace stereotypes, with men associated with assertiveness and directness, and women with cooperative and communal behaviors (Ellemers, 2018). These perceptions can shape how likely an employee is to address underperformance in a team setting, the dependent variable (DV), measured on a Likert scale from "Not at all likely" to "Very likely." Prior research highlights how gendered behaviors are judged and rewarded differently in teams (Carpini et al., 2023), but less is known about how this influences addressing underperformance. This study investigates whether gender affects the likelihood of addressing underperformance, contributing to the understanding of gendered workplace dynamics.
+
+Research Question: 
+Does a person's gender (male or female) influence how likely they are to talk about a fellow employee's underperformance in a work group or team?
+
+Hypotheses:
+H0: There is no difference between male and female employees in how likely they are to talk about a fellow employee's underperformance in a work group or team.
+$$H_0: \mu_{Male} = \mu_{Female}$$
+HA: There is a difference between male and female employees in how likely they are to talk about a fellow employee's underperformance in a work group or team.
+$$  H_A: \mu_{Male} \neq \mu_{Female} $$
+Convert gender variable to factor.
+```{r}
+clean_dat$Gender <- as.factor(clean_dat$Gender)
+```
+
+Assumptions Checks:
+
+Check the homogeneity of variance assumption between the two groups using Levene's test.
+```{r}
+leveneTest(talkteam ~ Gender, data = clean_dat)
+```
+The results do not indicate a violation of the homogeneity of variance assumption. This is because the p-value we got from the Levene's test (0.08) is greater than 0.05, meaning no significance. Since my results did not indicate a violation of the homogeneity of variance assumption but if it did, the name of the test correction I would need to run is Welch's test. To perform the test I would change the t.test() code of var.equal to equal FALSE. 
+
+Analysis:
+
+Running an independent samples t-test to determine if there is a difference in how likely male and female employees are to talk about a fellow employee's underperformance in a work group or team.
+```{r}
+t.test(clean_dat$talkteam ~ clean_dat$Gender,
+       var.equal = TRUE)
+```
+
+For One-Way ANOVA: I do not need to run an Omnibus test since my independent variable only has two levels (female and male), but to compare with independent t test results...
+```{r}
+omnibus <- aov(talkteam ~ Gender, data = clean_dat)
+summary(omnibus)
+```
+A post hoc test is unnecessary for this study because the independent variable (gender) has only two levels (male and female). Since both the t-test and ANOVA directly compare the means of the two groups, additional pairwise comparisons are not needed.
+
+Effect size for this comparison (One-way ANOVA).
+```{r}
+etaSquared(omnibus)
+```
+The effect size is *n*^2 = 0.000003.
+
+Effect size for this comparison (Independent t test).
+```{r}
+rstatix::cohens_d(talkteam ~ Gender, data = clean_dat)
+```
+The effect size is *d* = -0.004.
+
+Results paragraph:
+An independent-samples t-test and a one-way ANOVA were conducted to evaluate whether gender (male or female) influences the likelihood of addressing a fellow employee's underperformance in a team setting. Results from the t-test indicated no significant difference between male and female employees, *t*(1627) = −0.07, *p* = 0.94, 95% CI [−0.12,0.11]. The one-way ANOVA confirmed that there was no significant effect of gender on the likelihood of addressing underperformance, *F*(1,1627) = 0.005, *p* = 0.94. The effect size for the ANOVA (<i>n</i><sup>2</sup>\n = 0.000003) and the t-test (*d* = -0.004) were both negligible, indicating that gender does not explain the variance in the dependent variable. No post hoc tests were conducted, as the independent variable had only two levels (male and female), and the t-test and ANOVA compared the two groups.
+
+Plot relevant to these data; Data visualization.
+```{r}
+ggplot(clean_dat, aes(x = Gender, y = talkteam, fill = Gender)) +
+  geom_boxplot() +
+  labs(
+    title = "Gender and Likelihood of Addressing Underperformance",
+    x = "Gender",
+    y = "Likelihood of Talking About It to Team Rating"
+  ) +
+  theme_minimal()
+```
+
+Post hoc power analysis.
+```{r}
+pwr.t.test(n = NULL, d = -0.004, sig.level = .05, type = "two.sample", power = .8, alternative = "two.sided")
+```
+The smallest sample size required to achieve 80% power in this study, given the observed effect size (*d* = −0.004), is 981,109 participants per group, or approximately 1,962,218 participants in total. This is a very large and an impractical sample size for a study of this kind. This requirement reflects the negligible effect size observed, which means that gender has almost no measurable influence on the likelihood of addressing underperformance in a team setting.
+
+The effect size is so small that the function will not run properly. Refer to the t test power analysis instead.
+```{r}
+#pwr.anova.test(k = 2, n = NULL, f = 3.032075e-06, sig.level = .05, power =.8)
+```
+
+Discussion paragraph:
+The results of this study indicate that gender does not significantly influence the likelihood of addressing underperformance in a team setting. Both the independent-samples t-test and the one-way ANOVA showed no significant differences between male and female employees, with negligible effect sizes (*d* = − 0.004; <i>n</i><sup>2</sup>\n = 0.000003). These findings suggest that despite some workplace stereotypes that associate men with assertiveness and women with communal behaviors (Ellemers, 2018), gender plays a small role in shaping reaction to team dynamics involving underperformance. The lack of effect shows the potential for other factors like as organizational culture, leadership styles, or individual personality traits, to have greater influence on how employees address the scenarios described. While the study's large sample size increases its generalizability, the negligible effect size suggests that future research needs to explore alternative variables as a way to better understand team dynamics and communication styles in the workplace.
+
+__References__
+
+<div style="text-in dent: -1em; margin-left: 1em;">
+Carpini, J. A., Luksyte, A., Parker, S. K., & Collins, C. G. (2023). Can a familiar gender stereotype create a not‐so‐familiar benefit for women? Evidence of gendered differences in ascribed stereotypes and effects of team member adaptivity on performance evaluations. <i>Journal of Organizational Behavior, 44</i>(4), 590–605. https://doi-org.ezproxy.spu.edu/10.1002/job.2702
+</div>
+
+<div style="text-indent: -1em; margin-left: 1em;">
+Ellemers, N. (2018). Gender stereotypes. <i>Annual Review of Psychology, 69</i>, 275–298. https://doi.org/10.1146/annurev-psych-122216-011719
+</div>
+
+
